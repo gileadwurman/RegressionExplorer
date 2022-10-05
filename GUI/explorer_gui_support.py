@@ -5,9 +5,16 @@
 #  in conjunction with Tcl version 8.6
 #    Sep 09, 2022 03:32:08 PM PDT  platform: Windows NT
 #    Sep 09, 2022 03:40:47 PM PDT  platform: Windows NT
+#    Oct 03, 2022 06:13:28 PM PDT  platform: Windows NT
+#    Oct 03, 2022 07:32:36 PM PDT  platform: Windows NT
+#    Oct 04, 2022 02:20:17 PM PDT  platform: Windows NT
 
 import sys
 import io
+from pathlib import Path
+from ast import literal_eval
+import re
+from inspect import signature
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.filedialog as fd
@@ -37,6 +44,7 @@ def main(*args):
         'figure': None,
         'df': None,
         'curr_file': '',
+        'import_opts_str': '',
         'plot_options': dict(),
         'hdr_idx': (),
         'df_pairplot': pd.DataFrame()
@@ -54,21 +62,80 @@ def import_window():
     _top2 = tk.Toplevel(root)
     _w2 = explorer_gui.ImportWindow(_top2)
     _w2.input_file_str.set(_data['curr_file'])
+    _w2.import_kwargs_str.set(_data['import_opts_str'])
+    _w2.load_func = pd.read_csv #TBI: other formats
+    _w2.valid_kwargs = True #Must be true because only valid values are stored
+    _w2.valid_file = validate_input_file(_w2.input_file_str.get())
+    #To initialize import_kwargs_dict
+    _w2.import_kwargs_dict = ()
+    _ = validate_import_kwargs(_w2.import_kwargs_str.get())
 
 def open_file_chooser(*args):
     filetypes = (
         ('Comma-separated value','*.csv'),
         ('All files','*'))
-    
+    origfilename = _w2.input_file_str.get()
     filename = fd.askopenfilename(parent=_top2, title='Select data file',
-        filetypes=filetypes, initialfile=_w2.input_file_str.get())
+        filetypes=filetypes, initialfile=origfilename)
     
     _w2.input_file_str.set(filename)
+    validate_input_file(filename, origfilename)
+
+def validate_input_file(*args):
+    try:
+        path = Path(args[0])
+        if not path.is_file():
+            raise OSError(f'String {path} does not point to a file')
+        
+        if _w2.valid_kwargs: #only if kwargs are also valid
+            _w2.ImportButton['state'] = tk.NORMAL
+        _w2.InputFileField['foreground'] = 'black'
+        _w2.valid_file = True
+        return True
+    except OSError:
+        _w2.ImportButton['state'] = tk.DISABLED
+        _w2.InputFileField['foreground'] = 'red'
+        _w2.valid_file = False
+        return False
+
+def validate_import_kwargs(*args):
+    input_str = args[0]
+    
+    try:
+        kwargs_dict = dict()
+        if input_str is not None and input_str != '':
+            kwargs_dict = dict((k, literal_eval(v)) 
+                              for k,v in (kwarg.split('=') 
+                                          for kwarg in re.split('[, ]+',
+                                                                input_str)))
+            params = signature(_w2.load_func).parameters
+            
+            for key in kwargs_dict.keys():
+                if key not in params:
+                    raise TypeError(
+                        "Function {fname} does not take argument {key}".format(
+                            fname=_w2.load_func.__name__, key=key))
+        
+        if _w2.valid_file: #only if filename is also valid
+            _w2.ImportButton['state'] = tk.NORMAL
+        _w2.ImportKwargsField['foreground'] = 'black'
+        _w2.import_kwargs_dict = kwargs_dict
+        _data['import_opts_str'] = input_str
+        _w2.valid_kwargs = True
+        return True
+    except Exception as err:
+        _w2.ImportButton['state'] = tk.DISABLED
+        _w2.ImportKwargsField['foreground'] = 'red'
+        tk.messagebox.showerror('Invalid Import Kwargs',err,parent=_top2)
+        _w2.import_kwargs_dict = dict()
+        _data['import_opts_str'] = ''
+        _w2.valid_kwargs = False
+        return False
 
 def import_file():
     filename = _w2.input_file_str.get()
-    
-    _data['df'] = pd.read_csv(filename)
+    opts = _w2.import_kwargs_dict
+    _data['df'] = _w2.load_func(filename, **opts)
     _top2.withdraw()
     _data['curr_file'] = filename
     set_header_list_default()
@@ -155,10 +222,10 @@ def create_pairplot(*args):
     _data['figure'] = canvas.get_tk_widget()
     _data['figure'].pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-'''
-Start-up for execution directly from this file
-'''
 if __name__ == '__main__':
+    '''
+    Start-up for execution directly from this file
+    '''
     explorer_gui.start_up()
 
 ## This is how you plot a regular pyplot figure in the frame
@@ -178,3 +245,8 @@ if __name__ == '__main__':
 # _data['df'].info(verbose=True, buf=str_buf)
 # # print(_data['df'].describe(), file=str_buf)
 # _w1.Label1Text.set(str_buf.getvalue())
+
+
+
+
+

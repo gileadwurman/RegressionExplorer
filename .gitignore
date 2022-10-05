@@ -131,3 +131,7 @@ dmypy.json
 # PAGE backups
 GUI/backups/
 \#*.tcl\#*
+
+# CEFPython stuff
+GUI/blob_storage
+GUI/webrtc_event_logs
