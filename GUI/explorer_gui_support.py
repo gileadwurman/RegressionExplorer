@@ -8,6 +8,10 @@
 #    Oct 03, 2022 06:13:28 PM PDT  platform: Windows NT
 #    Oct 03, 2022 07:32:36 PM PDT  platform: Windows NT
 #    Oct 04, 2022 02:20:17 PM PDT  platform: Windows NT
+#    Oct 05, 2022 10:43:43 AM PDT  platform: Windows NT
+#    Oct 13, 2022 10:49:37 PM PDT  platform: Windows NT
+#    Nov 03, 2022 03:51:06 PM PDT  platform: Windows NT
+#    Nov 07, 2022 11:20:08 AM PST  platform: Windows NT
 
 import sys
 import io
@@ -37,9 +41,10 @@ def main(*args):
     root = tk.Tk()
     root.protocol( 'WM_DELETE_WINDOW' , root.destroy)
     # Creates a toplevel widget.
-    global _top1, _w1, _data
-    _top1 = root
-    _w1 = explorer_gui.MainWindow(_top1)
+    global _tMain, _wMain, _data
+    _tMain = root
+    _wMain = explorer_gui.MainWindow(_tMain)
+    _wMain.menubar.entryconfig("DataFrame",state="disabled") #No dataframe yet
     _data = {
         'figure': None,
         'df': None,
@@ -58,27 +63,28 @@ def main(*args):
 File import dialog functions
 '''
 def import_window():
-    global _top2, _w2
-    _top2 = tk.Toplevel(root)
-    _w2 = explorer_gui.ImportWindow(_top2)
-    _w2.input_file_str.set(_data['curr_file'])
-    _w2.import_kwargs_str.set(_data['import_opts_str'])
-    _w2.load_func = pd.read_csv #TBI: other formats
-    _w2.valid_kwargs = True #Must be true because only valid values are stored
-    _w2.valid_file = validate_input_file(_w2.input_file_str.get())
+    global _tImp, _wImp
+    _tImp = tk.Toplevel(root)
+    _tImp.grab_set()
+    _wImp = explorer_gui.ImportWindow(_tImp)
+    _wImp.input_file_str.set(_data['curr_file'])
+    _wImp.import_kwargs_str.set(_data['import_opts_str'])
+    _wImp.load_func = pd.read_csv #TBI: other formats
+    _wImp.valid_kwargs = True #Must be true because only valid values are stored
+    _wImp.valid_file = validate_input_file(_wImp.input_file_str.get())
     #To initialize import_kwargs_dict
-    _w2.import_kwargs_dict = ()
-    _ = validate_import_kwargs(_w2.import_kwargs_str.get())
+    _wImp.import_kwargs_dict = ()
+    _ = validate_import_kwargs(_wImp.import_kwargs_str.get())
 
 def open_file_chooser(*args):
     filetypes = (
         ('Comma-separated value','*.csv'),
         ('All files','*'))
-    origfilename = _w2.input_file_str.get()
-    filename = fd.askopenfilename(parent=_top2, title='Select data file',
+    origfilename = _wImp.input_file_str.get()
+    filename = fd.askopenfilename(parent=_tImp, title='Select data file',
         filetypes=filetypes, initialfile=origfilename)
     
-    _w2.input_file_str.set(filename)
+    _wImp.input_file_str.set(filename)
     validate_input_file(filename, origfilename)
 
 def validate_input_file(*args):
@@ -87,15 +93,15 @@ def validate_input_file(*args):
         if not path.is_file():
             raise OSError(f'String {path} does not point to a file')
         
-        if _w2.valid_kwargs: #only if kwargs are also valid
-            _w2.ImportButton['state'] = tk.NORMAL
-        _w2.InputFileField['foreground'] = 'black'
-        _w2.valid_file = True
+        if _wImp.valid_kwargs: #only if kwargs are also valid
+            _wImp.ImportButton['state'] = tk.NORMAL
+        _wImp.InputFileField['foreground'] = 'black'
+        _wImp.valid_file = True
         return True
     except OSError:
-        _w2.ImportButton['state'] = tk.DISABLED
-        _w2.InputFileField['foreground'] = 'red'
-        _w2.valid_file = False
+        _wImp.ImportButton['state'] = tk.DISABLED
+        _wImp.InputFileField['foreground'] = 'red'
+        _wImp.valid_file = False
         return False
 
 def validate_import_kwargs(*args):
@@ -108,53 +114,61 @@ def validate_import_kwargs(*args):
                               for k,v in (kwarg.split('=') 
                                           for kwarg in re.split('[, ]+',
                                                                 input_str)))
-            params = signature(_w2.load_func).parameters
+            params = signature(_wImp.load_func).parameters
             
             for key in kwargs_dict.keys():
                 if key not in params:
                     raise TypeError(
                         "Function {fname} does not take argument {key}".format(
-                            fname=_w2.load_func.__name__, key=key))
+                            fname=_wImp.load_func.__name__, key=key))
         
-        if _w2.valid_file: #only if filename is also valid
-            _w2.ImportButton['state'] = tk.NORMAL
-        _w2.ImportKwargsField['foreground'] = 'black'
-        _w2.import_kwargs_dict = kwargs_dict
+        if _wImp.valid_file: #only if filename is also valid
+            _wImp.ImportButton['state'] = tk.NORMAL
+        _wImp.ImportKwargsField['foreground'] = 'black'
+        _wImp.import_kwargs_dict = kwargs_dict
         _data['import_opts_str'] = input_str
-        _w2.valid_kwargs = True
+        _wImp.valid_kwargs = True
         return True
     except Exception as err:
-        _w2.ImportButton['state'] = tk.DISABLED
-        _w2.ImportKwargsField['foreground'] = 'red'
-        tk.messagebox.showerror('Invalid Import Kwargs',err,parent=_top2)
-        _w2.import_kwargs_dict = dict()
+        _wImp.ImportButton['state'] = tk.DISABLED
+        _wImp.ImportKwargsField['foreground'] = 'red'
+        tk.messagebox.showerror('Invalid Import Kwargs',err,parent=_tImp)
+        _wImp.import_kwargs_dict = dict()
         _data['import_opts_str'] = ''
-        _w2.valid_kwargs = False
+        _wImp.valid_kwargs = False
         return False
 
 def import_file():
-    filename = _w2.input_file_str.get()
-    opts = _w2.import_kwargs_dict
-    _data['df'] = _w2.load_func(filename, **opts)
-    _top2.withdraw()
+    filename = _wImp.input_file_str.get()
+    opts = _wImp.import_kwargs_dict
+    _data['df'] = _wImp.load_func(filename, **opts)
+    _tImp.grab_release()
+    _tImp.withdraw()
+    del globals()['_tImp']
+    del globals()['_wImp']
     _data['curr_file'] = filename
     set_header_list_default()
+    _wMain.menubar.entryconfig("DataFrame",state="normal")
 
 def import_cancel():
-    _top2.withdraw()
+    _tImp.grab_release()
+    _tImp.withdraw()
+    del globals()['_tImp']
+    del globals()['_wImp']
+    
 
 '''
-PairPlot tab functions
+EDA tab functions
 '''
 def set_header_list_default():
-    _w1.HeaderList.delete(0,tk.END)
+    _wMain.HeaderList.delete(0,tk.END)
     _data['plot_options'] = dict()
     _data['hdr_sel'] = ()
     _data['df_pairplot'] = pd.DataFrame()
     _data['df_pairplot'].index = _data['df'].index
     
     for col in _data['df'].columns:
-        _w1.HeaderList.insert(tk.END,str(col))
+        _wMain.HeaderList.insert(tk.END,str(col))
         if _data['df'][col].dtype == 'object':
             _data['plot_options'][col] = 'exclude'
         elif _data['df'][col].dtype == 'category':
@@ -168,15 +182,15 @@ def header_select(event):
     idx = event.widget.curselection()
     _data['hdr_sel'] = idx
     if len(idx) > 0:
-        _w1.PlotOptionMenu.set(_data['plot_options'][event.widget.get(idx[0])])
+        _wMain.PlotOptionMenu.set(_data['plot_options'][event.widget.get(idx[0])])
 
 def plot_option_changed(event):
     opt = event.widget.get()
     selidx = _data['hdr_sel']
-    selhdrs = [_w1.HeaderList.get(idx) for idx in selidx]
+    selhdrs = [_wMain.HeaderList.get(idx) for idx in selidx]
     
     # for idx in selidx:
-    #     selhdrs.append(_w1.HeaderList.get(idx))
+    #     selhdrs.append(_wMain.HeaderList.get(idx))
     _data['plot_options'].update({sel:opt for sel in selhdrs})
     
     #Special case: set column as index and drop from header list
@@ -188,7 +202,7 @@ def plot_option_changed(event):
         _data['df_pairplot'].drop(selhdrs,axis=1,inplace=True,errors='ignore')
         _data['hdr_sel'] = ()
         for idx in selidx[::-1]: #reverse order to avoid changing index mid-op
-            _w1.HeaderList.delete(idx)
+            _wMain.HeaderList.delete(idx)
     elif opt == 'linear' or opt == 'categorical':
         _data['df_pairplot'][selhdrs] = _data['df'][selhdrs]
     elif opt == 'log base 10':
@@ -217,10 +231,135 @@ def create_pairplot(*args):
         _data['figure'].destroy()
         _data['figure'] = None
     
-    canvas = FigureCanvasTkAgg(fig, master=_w1.PairPlotFrame)
+    canvas = FigureCanvasTkAgg(fig, master=_wMain.PairPlotFrame)
     canvas.draw()
     _data['figure'] = canvas.get_tk_widget()
     _data['figure'].pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+def create_clustermap(*args):
+    fig = sns.clustermap(data=_data['df_pairplot'].corr(),
+                         cmap='cividis_r',
+                         cbar_pos=None).figure
+    
+    if _data['figure'] is not None:
+        _data['figure'].destroy()
+        _data['figure'] = None
+    
+    canvas = FigureCanvasTkAgg(fig, master=_wMain.PairPlotFrame)
+    canvas.draw()
+    _data['figure'] = canvas.get_tk_widget()
+    _data['figure'].pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+def menu_df_describe(*args):
+    if '_tDesc' not in globals():
+        global _tDesc, _wDesc
+        _tDesc = tk.Toplevel(root)
+        _wDesc = explorer_gui.DescDialog(_tDesc)
+        # This should be configurable in PAGE as a <Destroy> event binding,
+        # but for some reason it fires multiple times and generates errors
+        _tDesc.protocol('WM_DELETE_WINDOW', close_desc)
+    else:
+        _tDesc.lift()
+    
+    str_buf = io.StringIO()
+    with pd.option_context('display.max_columns',None,
+                           'display.max_colwidth',0,
+                           'display.width',255):
+        print(_data['df_pairplot'].describe(), file=str_buf)
+    _wDesc.DescTextBox.configure(state="normal")
+    _wDesc.DescTextBox.delete('1.0',tk.END)
+    _wDesc.DescTextBox.insert(tk.END,str_buf.getvalue())
+    _wDesc.DescTextBox.configure(state="disabled")
+
+def menu_df_info(*args):
+    if '_tInfo' not in globals():
+        global _tInfo, _wInfo
+        _tInfo = tk.Toplevel(root)
+        _wInfo = explorer_gui.InfoDialog(_tInfo)
+        _tInfo.protocol('WM_DELETE_WINDOW', close_info)
+    else:
+        _tInfo.lift()
+    
+    str_buf = io.StringIO()
+    with pd.option_context('display.max_columns',None,
+                           'display.max_colwidth',0,
+                           'display.width',255):
+        _data['df_pairplot'].info(verbose=True, buf=str_buf)
+    _wInfo.InfoTextBox.configure(state="normal")
+    _wInfo.InfoTextBox.delete('1.0',tk.END)
+    _wInfo.InfoTextBox.insert(tk.END,str_buf.getvalue())
+    _wInfo.InfoTextBox.configure(state="disabled")
+
+def menu_df_dropna(*args):
+    global _tDna,_wDna
+    str_buf = io.StringIO()
+    with pd.option_context('display.max_columns',None,
+                           'display.max_colwidth',0,
+                           'display.width',255):
+        _data['df'].info(verbose=True, buf=str_buf)
+    
+    _tDna = tk.Toplevel(root)
+    _tDna.grab_set()
+    _wDna = explorer_gui.DnaDialog(_tDna)
+    _wDna.dropna_axis.set(0)
+    _wDna.dropna_how.set(1)
+    _wDna.DnaCurrentTextBox.configure(state="normal")
+    _wDna.DnaCurrentTextBox.insert(tk.END,str_buf.getvalue())
+    _wDna.DnaCurrentTextBox.configure(state="disabled")
+    _wDna.DnaAfterTextBox.configure(state="disabled")
+
+def dna_dropna(*args):
+    axis = _wDna.dropna_axis.get()
+    how = _wDna.dropna_how.get()
+    if how == 1:
+        how = 'any'
+        thresh = None
+    elif how == 2:
+        how = 'all'
+        thresh = None
+    else:
+        how = None
+        thresh = int(_wDna.DnaMinNA.get())
+        shp = _data['df'].shape
+        thresh = max(0,shp[1-axis] - thresh + 1)
+    
+    tempdf = _data['df'].dropna(axis=axis, how=how, thresh=thresh)
+    str_buf = io.StringIO()
+    with pd.option_context('display.max_columns',None,
+                           'display.max_colwidth',0,
+                           'display.width',255):
+        tempdf.info(verbose=True, buf=str_buf)
+    
+    _wDna.DnaAfterTextBox.configure(state="normal")
+    _wDna.DnaAfterTextBox.delete('1.0',tk.END)
+    
+    if args[0]=='commit':
+        _wDna.DnaCurrentTextBox.configure(state="normal")
+        _wDna.DnaCurrentTextBox.delete('1.0',tk.END)
+        _wDna.DnaCurrentTextBox.insert(tk.END,str_buf.getvalue())
+        _wDna.DnaCurrentTextBox.configure(state="disabled")
+        _data['df'] = tempdf
+        set_header_list_default()
+    else:
+        _wDna.DnaAfterTextBox.insert(tk.END,str_buf.getvalue())
+    
+    _wDna.DnaAfterTextBox.configure(state="disabled")
+
+def close_desc(*args):
+    _tDesc.withdraw()
+    del globals()['_tDesc']
+    del globals()['_wDesc']
+
+def close_info(*args):
+    _tInfo.withdraw()
+    del globals()['_tInfo']
+    del globals()['_wInfo']
+
+def close_dropna(*args):
+    _tDna.grab_release()
+    _tDna.withdraw()
+    del globals()['_tDna']
+    del globals()['_wDna']
 
 if __name__ == '__main__':
     '''
@@ -234,7 +373,7 @@ if __name__ == '__main__':
 # ax.plot(_data['df']['horsepower'],_data['df']['mpg'],'k.')
 
 ## This is how you embed a browser frame
-# main_frame = cef_embedded.MainFrame(_w1.BrowserFrame)
+# main_frame = cef_embedded.MainFrame(_wMain.BrowserFrame)
 # main_frame.update()
 # # main_frame.event_generate("<Configure>")
 # browser=main_frame.get_browser()
@@ -244,7 +383,7 @@ if __name__ == '__main__':
 # str_buf = io.StringIO()
 # _data['df'].info(verbose=True, buf=str_buf)
 # # print(_data['df'].describe(), file=str_buf)
-# _w1.Label1Text.set(str_buf.getvalue())
+# _wMain.Label1Text.set(str_buf.getvalue())
 
 
 
